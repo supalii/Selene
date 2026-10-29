@@ -96,6 +96,8 @@ namespace Selene
             var l = new Level { Title = "Game options" };
             if (game.IsInstalled) l.Entries.Add(new Entry { Label = "Play", Icon = 0xe037, Run = () => { var id = game.Id; LoginScene.FinishThen(() => HomeNav.StartGameNow(id)); } });
             else l.Entries.Add(new Entry { Label = "Install", Icon = 0xe2c4, Run = () => { var id = game.Id; LoginScene.FinishThen(() => api.InstallGame(id)); } });
+            var actions = game.GameActions != null ? game.GameActions.Where(action => action != null && !action.IsPlayAction).ToList() : new List<GameAction>();
+            if (actions.Count > 0) l.Entries.Add(new Entry { Label = "Actions", Sub = "Run this game's other configured actions.", Icon = 0xe5c8, Opens = true, Value = () => actions.Count.ToString(), Run = () => Push(GameActionsLevel(actions)) });
             if (move != null) { var m = move; l.Entries.Add(new Entry { Label = "Move", Sub = "Change its place on Spotlight.", Icon = 0xe8d4, Run = () => LoginScene.FinishThen(m) }); }
             l.Entries.Add(new Entry { Label = "Favorite", Sub = "On your Favorites tab.", Icon = 0xe838, Toggle = () => game.Favorite, Run = () => { game.Favorite = !game.Favorite; Save(); } });
             l.Entries.Add(new Entry { Label = "Hidden", Sub = "Hidden games stay out of your lists.", Icon = 0xe8f5, Toggle = () => game.Hidden, Run = () => { game.Hidden = !game.Hidden; Save(); } });
@@ -107,6 +109,45 @@ namespace Selene
             l.Entries.Add(new Entry { Label = "Remove from library", Icon = 0xe5cd, Warn = true, Run = AskRemove });
             if (game.IsInstalled) l.Entries.Add(new Entry { Label = "Uninstall", Icon = 0xe872, Warn = true, Run = AskUninstall });
             return l;
+        }
+
+        private Level GameActionsLevel(List<GameAction> actions)
+        {
+            var level = new Level { Title = "Actions" };
+            foreach (var action in actions)
+            {
+                var selected = action;
+                level.Entries.Add(new Entry
+                {
+                    Label = string.IsNullOrWhiteSpace(selected.Name) ? selected.Type.ToString() : selected.Name,
+                    Sub = selected.Type.ToString(),
+                    Icon = 0xe5c8,
+                    Run = () => LoginScene.FinishThen(() => ActivateGameAction(selected))
+                });
+            }
+            return level;
+        }
+
+        private void ActivateGameAction(GameAction action)
+        {
+            try
+            {
+                var window = Application.Current != null ? Application.Current.MainWindow : null;
+                var viewModel = window != null ? window.DataContext : null;
+                if (viewModel == null) throw new InvalidOperationException("Playnite's main view model is unavailable.");
+                var editorProperty = viewModel.GetType().GetProperty("GamesEditor", BindingFlags.Public | BindingFlags.Instance);
+                var gamesEditor = editorProperty != null ? editorProperty.GetValue(viewModel, null) : null;
+                if (gamesEditor == null) throw new MissingMemberException("Playnite's game action runner is unavailable.");
+                var activate = gamesEditor.GetType().GetMethod(
+                    "ActivateAction",
+                    BindingFlags.Public | BindingFlags.Instance,
+                    null,
+                    new[] { typeof(Game), typeof(GameAction) },
+                    null);
+                if (activate == null) throw new MissingMethodException("Playnite's game action runner is unavailable.");
+                activate.Invoke(gamesEditor, new object[] { game, action });
+            }
+            catch (Exception ex) { HomeNav.Log("game options: action " + action.Name + " failed: " + (ex.InnerException ?? ex).Message); }
         }
 
         // when a game is matched with the wrong one (an older or emulated game with a name another game shares): choose the source,
