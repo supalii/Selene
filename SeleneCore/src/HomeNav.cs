@@ -872,18 +872,7 @@ namespace Selene
                 if (shield != null && shield.IsVisible) { HideShield(); fixes.Add("black shield hidden"); }
                 var root = w.Content as UIElement;
                 if (root != null && root.Opacity < 0.99 && !guideSwitching) { FadeInRoot(root); fixes.Add("home faded in (opacity " + root.Opacity.ToString("0.00") + ")"); }
-                // a new drawing surface: a frame drawn in software, then the graphics card again
-                var src = PresentationSource.FromVisual(w) as System.Windows.Interop.HwndSource;
-                if (src != null && src.CompositionTarget != null && src.CompositionTarget.RenderMode == System.Windows.Interop.RenderMode.Default)
-                {
-                    src.CompositionTarget.RenderMode = System.Windows.Interop.RenderMode.SoftwareOnly;
-                    w.Dispatcher.BeginInvoke(new Action(() =>
-                    {
-                        try { if (src.CompositionTarget != null) src.CompositionTarget.RenderMode = System.Windows.Interop.RenderMode.Default; } catch { }
-                        if (root != null) root.InvalidateVisual();
-                    }), System.Windows.Threading.DispatcherPriority.ContextIdle);
-                    fixes.Add("drawing surface renewed");
-                }
+                if (root != null) { root.InvalidateVisual(); fixes.Add("home redrawn"); }
                 Log("screen refresh (" + why + "): " + string.Join(", ", fixes));
             }
             catch (Exception ex) { Log("screen refresh: " + ex.Message); }
@@ -5428,7 +5417,7 @@ namespace Selene
 
         // a plain black, topmost, never-activated window over the TV; its last rendered frame is black, so showing it
         // again is instant and clean
-        private static void ShowShield(Window main)
+        private static void ShowShield(Window main, bool warmup = false)
         {
             try
             {
@@ -5441,14 +5430,23 @@ namespace Selene
                     };
                     shield.SourceInitialized += (s, e) => DisableWindowTransitions(new System.Windows.Interop.WindowInteropHelper(shield).Handle);
                 }
-                shield.Left = main.Left; shield.Top = main.Top; shield.Width = main.ActualWidth; shield.Height = main.ActualHeight;
+                shield.Left = warmup ? -20000 : main.Left;
+                shield.Top = warmup ? -20000 : main.Top;
+                shield.Width = main.ActualWidth;
+                shield.Height = main.ActualHeight;
+                shield.Opacity = warmup ? 0 : 1;
                 bool firstTimeHere = !shield.IsVisible;
                 shield.Show();
                 var autoHide = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(2500) };
                 autoHide.Tick += (s2, e2) => { autoHide.Stop(); if (shield != null && shield.IsVisible) { shield.Hide(); Log("shield: still up after 2.5 s -> removed"); } };
                 autoHide.Start();
                 SetWindowPos(new System.Windows.Interop.WindowInteropHelper(shield).Handle, new IntPtr(-1), 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0010);
-                if (firstTimeHere && main.ActualWidth > 100)
+                if (warmup)
+                {
+                    shield.UpdateLayout();
+                    shield.Dispatcher.Invoke(new Action(() => { }), System.Windows.Threading.DispatcherPriority.Render);
+                }
+                else if (firstTimeHere && main.ActualWidth > 100)
                 {
                     // make sure the shield is actually on screen before Playnite comes forward (the first press showed
                     // Playnite's old bright picture for 3 frames while the shield was still being moved/sized)
@@ -5460,17 +5458,15 @@ namespace Selene
             catch (Exception ex) { Log("shield failed: " + ex.Message); }
         }
 
-        // render the shield once at startup, off-screen, so its first real appearance is already black
+        // render the shield once at startup, fully transparent and off-screen, so warm-up never flashes
         private static void WarmShield()
         {
             try
             {
                 if (launching || guideSwitching || (shield != null && shield.IsVisible)) return;
                 var main = Application.Current.MainWindow;
-                if (main == null) return;
-                var off = new Window { Left = -20000, Top = -20000, Width = 64, Height = 64 };
-                ShowShield(off);
-                shield.Left = -20000; shield.Top = -20000;
+                if (main == null || main.ActualWidth <= 100 || main.ActualHeight <= 100) return;
+                ShowShield(main, true);
                 var t0 = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(400) };
                 t0.Tick += (s, e) => { t0.Stop(); HideShield(); };
                 t0.Start();
