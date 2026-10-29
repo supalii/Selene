@@ -79,7 +79,7 @@ namespace Selene
             Root.Children.Add(layout);
             Root.Children.Add(Ui.Prompts(false, Ui.Prompt("B", "Back")));
             Root.Children.Add(Ui.Prompts(true, Ui.Prompt("A", "Select")));
-            levels.Push(game != null ? MainLevel() : SectionLevel("Extensions", MenuItems(), 0));
+            levels.Push(game != null ? MainLevel() : ExtensionsLevel());
             if (toMetadata && game != null) levels.Push(MetadataLevel());   // back from typing an id
         }
 
@@ -215,7 +215,7 @@ namespace Selene
 
         private Level ExtensionsLevel()
         {
-            var items = ExtensionItems();
+            var items = game != null ? ExtensionItems() : MenuItems();
             var level = SectionLevel("Extensions", items, 0);
             level.Entries.Insert(0, new Entry
             {
