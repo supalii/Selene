@@ -234,8 +234,14 @@ namespace Selene
             List<AppSoftware> tools;
             try
             {
-                // These members are on Playnite's runtime database and view model, not the SDK interfaces.
-                var database = HomeNav.Api.Database;
+                // SoftwareApps is on the main view model's internal database, not the SDK database API wrapper.
+                var window = Application.Current != null ? Application.Current.MainWindow : null;
+                var viewModel = window != null ? window.DataContext : null;
+                if (viewModel == null) throw new InvalidOperationException("Playnite's main view model is unavailable.");
+                var mainDatabase = viewModel.GetType().GetProperty("Database", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                if (mainDatabase == null) throw new MissingMemberException("Playnite's main database is unavailable.");
+                var database = mainDatabase.GetValue(viewModel, null);
+                if (database == null) throw new InvalidOperationException("Playnite returned no main database.");
                 var softwareApps = database.GetType().GetProperty("SoftwareApps", BindingFlags.Public | BindingFlags.Instance);
                 if (softwareApps == null) throw new MissingMemberException("Playnite's software tools are unavailable.");
                 var registered = softwareApps.GetValue(database, null) as IEnumerable;
