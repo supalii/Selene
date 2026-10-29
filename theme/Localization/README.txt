@@ -2,8 +2,8 @@ Selene in your language
 =======================
 
 Look > Language follows Playnite by default, or selects a language explicitly. Restart Playnite after changing it.
-Bundled starter translations cover common navigation and settings in German, Spanish, French, Brazilian Portuguese,
-Simplified Chinese, Japanese and Filipino. They are partial; phrases without translations stay English.
+Bundled translations include a full Indonesian translation, plus starter translations for common navigation and settings
+in German, Spanish, French, Brazilian Portuguese, Simplified Chinese, Japanese and Filipino. Missing phrases stay English.
 
 Drop a text file here named after Playnite's language setting: de_DE.txt, fr_FR.txt, pt_BR.txt... or just de.txt,
 fr.txt to cover every variant. (A theme update replaces this folder: to keep yours, put it in Selene Core's data folder
