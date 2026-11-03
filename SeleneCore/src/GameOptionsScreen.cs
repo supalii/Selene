@@ -79,7 +79,7 @@ namespace Selene
             Root.Children.Add(layout);
             Root.Children.Add(Ui.Prompts(false, Ui.Prompt("B", "Back")));
             Root.Children.Add(Ui.Prompts(true, Ui.Prompt("A", "Select")));
-            levels.Push(game != null ? MainLevel() : SectionLevel("Extensions", MenuItems(), 0));
+            levels.Push(game != null ? MainLevel() : ExtensionsLevel());
             if (toMetadata && game != null) levels.Push(MetadataLevel());   // back from typing an id
         }
 
@@ -98,6 +98,8 @@ namespace Selene
             else l.Entries.Add(new Entry { Label = "Install", Icon = 0xe2c4, Run = () => { var id = game.Id; LoginScene.FinishThen(() => api.InstallGame(id)); } });
             if (Features.On("achievements") && AchievementsData.Available())
                 l.Entries.Add(new Entry { Label = "Achievements", Sub = "What you've unlocked in this game.", Icon = 0xea65, Opens = true, Run = OpenAchievements });
+            var actions = game.GameActions != null ? game.GameActions.Where(action => action != null && !action.IsPlayAction).ToList() : new List<GameAction>();
+            if (actions.Count > 0) l.Entries.Add(new Entry { Label = "Actions", Sub = "Run this game's other configured actions.", Icon = 0xe5c8, Opens = true, Value = () => actions.Count.ToString(), Run = () => Push(GameActionsLevel(actions)) });
             if (move != null) { var m = move; l.Entries.Add(new Entry { Label = "Move", Sub = "Change its place on Spotlight.", Icon = 0xe8d4, Run = () => LoginScene.FinishThen(m) }); }
             l.Entries.Add(new Entry { Label = "Favorite", Sub = "On your Favorites tab.", Icon = 0xe838,
                 Toggle = () => FavoriteChoice.Read(game, Profiles.Active), Run = ToggleFavoriteOption });
@@ -110,6 +112,45 @@ namespace Selene
             l.Entries.Add(new Entry { Label = "Remove from library", Icon = 0xe5cd, Warn = true, Run = AskRemove });
             if (game.IsInstalled) l.Entries.Add(new Entry { Label = "Uninstall", Icon = 0xe872, Warn = true, Run = AskUninstall });
             return l;
+        }
+
+        private Level GameActionsLevel(List<GameAction> actions)
+        {
+            var level = new Level { Title = "Actions" };
+            foreach (var action in actions)
+            {
+                var selected = action;
+                level.Entries.Add(new Entry
+                {
+                    Label = string.IsNullOrWhiteSpace(selected.Name) ? selected.Type.ToString() : selected.Name,
+                    Sub = selected.Type.ToString(),
+                    Icon = 0xe5c8,
+                    Run = () => LoginScene.FinishThen(() => ActivateGameAction(selected))
+                });
+            }
+            return level;
+        }
+
+        private void ActivateGameAction(GameAction action)
+        {
+            try
+            {
+                var window = Application.Current != null ? Application.Current.MainWindow : null;
+                var viewModel = window != null ? window.DataContext : null;
+                if (viewModel == null) throw new InvalidOperationException("Playnite's main view model is unavailable.");
+                var editorProperty = viewModel.GetType().GetProperty("GamesEditor", BindingFlags.Public | BindingFlags.Instance);
+                var gamesEditor = editorProperty != null ? editorProperty.GetValue(viewModel, null) : null;
+                if (gamesEditor == null) throw new MissingMemberException("Playnite's game action runner is unavailable.");
+                var activate = gamesEditor.GetType().GetMethod(
+                    "ActivateAction",
+                    BindingFlags.Public | BindingFlags.Instance,
+                    null,
+                    new[] { typeof(Game), typeof(GameAction) },
+                    null);
+                if (activate == null) throw new MissingMethodException("Playnite's game action runner is unavailable.");
+                activate.Invoke(gamesEditor, new object[] { game, action });
+            }
+            catch (Exception ex) { HomeNav.Log("game options: action " + action.Name + " failed: " + (ex.InnerException ?? ex).Message); }
         }
 
         // when a game is matched with the wrong one (an older or emulated game with a name another game shares): choose the source,
@@ -227,8 +268,83 @@ namespace Selene
 
         private Level ExtensionsLevel()
         {
-            var items = ExtensionItems();
-            return SectionLevel("Extensions", items, 0);
+            var items = game != null ? ExtensionItems() : MenuItems();
+            var level = SectionLevel("Extensions", items, 0);
+            level.Entries.Insert(0, new Entry
+            {
+                Label = "Tools",
+                Sub = "Run applications and scripts registered in Playnite.",
+                Icon = 0xe8b8,
+                Opens = true,
+                Run = () => Push(SoftwareToolsLevel())
+            });
+            return level;
+        }
+
+        private Level SoftwareToolsLevel()
+        {
+            var level = new Level { Title = "Tools" };
+            List<AppSoftware> tools;
+            try
+            {
+                // SoftwareApps is on the main view model's internal database, not the SDK database API wrapper.
+                var window = Application.Current != null ? Application.Current.MainWindow : null;
+                var viewModel = window != null ? window.DataContext : null;
+                if (viewModel == null) throw new InvalidOperationException("Playnite's main view model is unavailable.");
+                var mainDatabase = viewModel.GetType().GetProperty("Database", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                if (mainDatabase == null) throw new MissingMemberException("Playnite's main database is unavailable.");
+                var database = mainDatabase.GetValue(viewModel, null);
+                if (database == null) throw new InvalidOperationException("Playnite returned no main database.");
+                var softwareApps = database.GetType().GetProperty("SoftwareApps", BindingFlags.Public | BindingFlags.Instance);
+                if (softwareApps == null) throw new MissingMemberException("Playnite's software tools are unavailable.");
+                var registered = softwareApps.GetValue(database, null) as IEnumerable;
+                if (registered == null) throw new InvalidOperationException("Playnite returned no software tools collection.");
+                tools = registered.Cast<AppSoftware>().OrderBy(tool => tool.Name).ToList();
+            }
+            catch (Exception ex)
+            {
+                HomeNav.Log("game options: loading Playnite software tools failed: " + (ex.InnerException ?? ex).Message);
+                level.Entries.Add(new Entry { Label = "Tools aren't available", Sub = "Selene couldn't read Playnite's registered tools.", Run = () => { } });
+                return level;
+            }
+
+            if (tools.Count == 0)
+            {
+                level.Entries.Add(new Entry { Label = "No tools registered in Playnite", Sub = "Add an application or script in Playnite's settings.", Run = () => { } });
+                return level;
+            }
+
+            foreach (var tool in tools)
+            {
+                var app = tool;
+                level.Entries.Add(new Entry
+                {
+                    Label = app.Name,
+                    Sub = app.AppType == AppSoftwareType.Script ? "Runs a PowerShell script in Playnite." : app.Path,
+                    Icon = 0xe8b8,
+                    Run = () => LoginScene.FinishThen(() =>
+                    {
+                        try { StartSoftwareTool(app); }
+                        catch (Exception ex) { HomeNav.Log("game options: software tool " + app.Name + " failed: " + (ex.InnerException ?? ex).Message); }
+                    })
+                });
+            }
+            return level;
+        }
+
+        private static void StartSoftwareTool(AppSoftware tool)
+        {
+            var window = Application.Current != null ? Application.Current.MainWindow : null;
+            var viewModel = window != null ? window.DataContext : null;
+            if (viewModel == null) throw new InvalidOperationException("Playnite's main view model is unavailable.");
+            var start = viewModel.GetType().GetMethod(
+                "StartSoftwareTool",
+                BindingFlags.Public | BindingFlags.Instance,
+                null,
+                new[] { typeof(AppSoftware) },
+                null);
+            if (start == null) throw new MissingMethodException("Playnite's software tool launcher is unavailable.");
+            start.Invoke(viewModel, new object[] { tool });
         }
 
         private Level SectionLevel(string titleText, List<Item> items, int depth)

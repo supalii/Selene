@@ -7,6 +7,8 @@ translations of common navigation and settings; phrases without a translation st
 
 Every phrase Selene shows is in phrases.txt, ready to fill in: copy it, name the copy after your language (see below),
 write your words after each " = " and save it as UTF-8. Lines you leave empty stay English.
+Bundled translations include a full Indonesian translation, plus starter translations for common navigation and settings
+in German, Spanish, French, Brazilian Portuguese, Simplified Chinese, Japanese and Filipino. Missing phrases stay English.
 
 Drop a text file here named after Playnite's language setting: de_DE.txt, fr_FR.txt, pt_BR.txt... or just de.txt,
 fr.txt to cover every variant. (A theme update replaces this folder: to keep yours, put it in Selene Core's data folder

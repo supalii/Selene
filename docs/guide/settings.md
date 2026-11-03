@@ -29,7 +29,7 @@ under Playnite → Add-ons → Generic → **Selene Core**. Settings with a choi
 | | Sound volume | How loud Selene's own sounds are |
 | Look | Selene logo | The logo in Selene settings and on empty screens |
 | | Background sizing | Fill crops proportionally; Fit shows the whole picture with space around it; Stretch changes its proportions to fill the screen |
-| | Language | Follow Playnite or choose English, German, Spanish, French, Brazilian Portuguese, Simplified Chinese, Japanese or Filipino. A changed selection offers Restart now or Later. Language selection is also the first step on a new Selene installation. Bundled translations cover common navigation/settings; missing phrases remain English |
+| | Language | Follow Playnite or choose English, Indonesian, German, Spanish, French, Brazilian Portuguese, Simplified Chinese, Japanese or Filipino. A changed selection offers Restart now or Later. Language selection is also the first step on a new Selene installation. Indonesian is fully translated; other bundled translations cover common navigation/settings, with missing phrases remaining English |
 | | Profile in the top bar | Your avatar beside the clock |
 | | Text shadow | A soft halo behind text so it reads over bright pictures |
 | | Animated background | The moving backdrop behind the login and cards |
